@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Produits</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="supabase.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Produits</h1>
+    <nav>
+      <a href="index.html">Accueil</a>
+      <a href="produits.html">Produits</a>
+      <a href="commandes.html">Commandes</a>
+      <a href="profil.html">Profil</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="form-card">
+      <h2>Ajouter un produit</h2>
+      <form id="produitForm">
+        <input id="nom" type="text" placeholder="Nom du produit" required>
+        <input id="prix" type="number" placeholder="Prix (FCFA)" required>
+        <input id="image_url" type="text" placeholder="URL image (ou laisse vide)">
+        <button type="submit">Ajouter le produit</button>
+      </form>
+    </div>
+
+    <h2>Liste des produits</h2>
+    <div id="liste-produits" class="grid"></div>
+  </div>
+
+  <script type="module">
+    import { supabase } from './supabase.js';
+
+    // Ajouter produit
+    document.getElementById('produitForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const nom = document.getElementById('nom').value.trim();
+      const prix = Number(document.getElementById('prix').value);
+      const image_url = document.getElementById('image_url').value.trim() || null;
+
+      if (!nom || !prix) { alert('Nom et prix requis'); return; }
+
+      const { error } = await supabase.from('produits').insert([{ nom, prix, image_url }]);
+      if (error) alert('Erreur ajout produit: ' + error.message);
+      else { alert('Produit ajouté ✅'); loadProducts(); document.getElementById('produitForm').reset(); }
+    });
+
+    // Charger produits
+    async function loadProducts() {
+      const { data: produits, error } = await supabase.from('produits').select('*').order('id', { ascending:false });
+      const container = document.getElementById('liste-produits');
+      container.innerHTML = '';
+      if (error) { container.innerHTML = '<p class="small-muted">Erreur: '+error.message+'</p>'; return; }
+      if (!produits || produits.length === 0) { container.innerHTML = '<p class="small-muted">Aucun produit pour l\'instant.</p>'; return; }
+
+      produits.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'product-card';
+        div.innerHTML = `
+          <img src="${p.image_url || 'https://via.placeholder.com/300x200?text=No+Image'}" alt="${p.nom}">
+          <h3>${escapeHtml(p.nom)}</h3>
+          <p class="price">${p.prix} FCFA</p>
+          <p class="small-muted">Produit #${p.id}</p>
+          <button onclick="orderProduct(${p.id})">Commander</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    // Commander (appelée globalement)
+    window.orderProduct = async function(productId) {
+      // Vérifier user connecté
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { alert('Connecte-toi pour commander'); window.location.href = 'login.html'; return; }
+
+      const { error } = await supabase.from('commandes').insert([{ produit_id: productId, acheteur_id: user.id, quantite: 1 }]);
+      if (error) alert('Erreur commande: ' + error.message);
+      else alert('Commande passée ✅');
+    }
+
+    // sécurité : éviter injection via innerHTML
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#039;");
+    }
+
+    // init
+    loadProducts();
+  </script>
+</body>
+</html>
